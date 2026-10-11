@@ -1,0 +1,322 @@
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "starter Universal"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(340, 430)
+main.Position = UDim2.new(.5, -170, .5, -215)
+main.BackgroundColor3 = Color3.fromRGB(22, 22, 29)
+main.Parent = gui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+local function makeButton(parent, text, pos, size, callback)
+    local b = Instance.new("TextButton")
+    b.Text = text
+    b.Position = pos
+    b.Size = size
+    b.BackgroundColor3 = Color3.fromRGB(48, 48, 62)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.TextSize = 14
+    b.Parent = parent
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
+    b.Activated:Connect(callback)
+    return b
+end
+
+local reopen = makeButton(gui, "OPEN", UDim2.new(0, 15, .5, 0),
+    UDim2.fromOffset(85, 42), function()
+        main.Visible = true
+        reopen.Visible = false
+    end)
+reopen.Visible = false
+
+makeButton(main, "×", UDim2.new(1, -38, 0, 8),
+    UDim2.fromOffset(30, 30), function()
+        main.Visible = false
+        reopen.Visible = true
+    end)
+
+local avatar = Instance.new("ImageLabel")
+avatar.Size = UDim2.fromOffset(42, 42)
+avatar.Position = UDim2.fromOffset(12, 10)
+avatar.BackgroundTransparency = 1
+avatar.Image = Players:GetUserThumbnailAsync(
+    player.UserId, Enum.ThumbnailType.HeadShot,
+    Enum.ThumbnailSize.Size100x100
+)
+avatar.Parent = main
+
+local username = Instance.new("TextLabel")
+username.Position = UDim2.fromOffset(62, 10)
+username.Size = UDim2.new(1, -110, 0, 42)
+username.BackgroundTransparency = 1
+username.Text = player.Name
+username.TextColor3 = Color3.new(1, 1, 1)
+username.TextSize = 17
+username.TextXAlignment = Enum.TextXAlignment.Left
+username.Parent = main
+
+local tabs = Instance.new("Frame")
+tabs.Position = UDim2.fromOffset(10, 62)
+tabs.Size = UDim2.new(1, -20, 0, 38)
+tabs.BackgroundTransparency = 1
+tabs.Parent = main
+
+local content = Instance.new("Frame")
+content.Position = UDim2.fromOffset(10, 108)
+content.Size = UDim2.new(1, -20, 1, -118)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+local pages = {}
+local function createPage(name)
+    local p = Instance.new("ScrollingFrame")
+    p.Name = name
+    p.Size = UDim2.fromScale(1, 1)
+    p.BackgroundTransparency = 1
+    p.BorderSizePixel = 0
+    p.ScrollBarThickness = 4
+    p.CanvasSize = UDim2.new()
+    p.Visible = false
+    p.Parent = content
+    pages[name] = p
+    return p
+end
+
+local function showPage(name)
+    for n, p in pairs(pages) do
+        p.Visible = n == name
+    end
+end
+
+makeButton(tabs, "Fly", UDim2.fromOffset(0, 0),
+    UDim2.fromOffset(100, 36), function() showPage("Fly") end)
+makeButton(tabs, "Steal", UDim2.fromOffset(105, 0),
+    UDim2.fromOffset(100, 36), function() showPage("Steal") end)
+makeButton(tabs, "Chat", UDim2.fromOffset(210, 0),
+    UDim2.fromOffset(100, 36), function() showPage("Chat") end)
+
+local flyPage = createPage("Fly")
+local stealPage = createPage("Steal")
+local chatPage = createPage("Chat")
+
+local flying = false
+local flyConnection
+local flyAttachment
+local flyVelocity
+local oldAutoRotate
+
+local function stopFly()
+    flying = false
+    if flyConnection then flyConnection:Disconnect() flyConnection = nil end
+    if flyVelocity then flyVelocity:Destroy() flyVelocity = nil end
+    if flyAttachment then flyAttachment:Destroy() flyAttachment = nil end
+
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.AutoRotate = oldAutoRotate ~= false
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+end
+
+makeButton(flyPage, "Toggle Fly", UDim2.fromOffset(5, 5),
+    UDim2.new(1, -10, 0, 42), function()
+        if flying then
+            stopFly()
+            return
+        end
+
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not root then return end
+
+        flying = true
+        oldAutoRotate = humanoid.AutoRotate
+        humanoid.AutoRotate = false
+
+        flyAttachment = Instance.new("Attachment")
+        flyAttachment.Parent = root
+
+        flyVelocity = Instance.new("LinearVelocity")
+        flyVelocity.Attachment0 = flyAttachment
+        flyVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+        flyVelocity.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+        flyVelocity.MaxForce = 1000000
+        flyVelocity.VectorVelocity = Vector3.zero
+        flyVelocity.Parent = root
+
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not flying or not root.Parent then
+                stopFly()
+                return
+            end
+
+            local camera = workspace.CurrentCamera
+            local move = humanoid.MoveDirection
+            local look = camera.CFrame.LookVector
+
+            if move.Magnitude > 0.01 then
+                flyVelocity.VectorVelocity = look * 55
+            else
+                flyVelocity.VectorVelocity = Vector3.zero
+            end
+        end)
+    end)
+
+makeButton(flyPage, "Stop Fly", UDim2.fromOffset(5, 55),
+    UDim2.new(1, -10, 0, 38), stopFly)
+
+local flingEnabled = false
+makeButton(flyPage, "Toggle Fling", UDim2.fromOffset(5, 100),
+    UDim2.new(1, -10, 0, 42), function()
+        flingEnabled = not flingEnabled
+    end)
+
+local flingLabel = Instance.new("TextLabel")
+flingLabel.Position = UDim2.fromOffset(5, 145)
+flingLabel.Size = UDim2.new(1, -10, 0, 40)
+flingLabel.BackgroundTransparency = 1
+flingLabel.TextColor3 = Color3.new(1, 1, 1)
+flingLabel.TextWrapped = true
+flingLabel.Text = "Fling toggle: local spin preview only"
+flingLabel.Parent = flyPage
+
+local function clearRows(page)
+    for _, child in ipairs(page:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+end
+
+local function inspectPlayers(page, mode)
+    clearRows(page)
+    local y = 5
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= player then
+            local targetPlayer = target
+            makeButton(page, targetPlayer.Name,
+                UDim2.fromOffset(5, y),
+                UDim2.new(1, -10, 0, 36), function()
+                    clearRows(page)
+
+                    local heading = Instance.new("TextLabel")
+                    heading.Position = UDim2.fromOffset(5, 5)
+                    heading.Size = UDim2.new(1, -10, 0, 36)
+                    heading.BackgroundTransparency = 1
+                    heading.TextColor3 = Color3.new(1, 1, 1)
+                    heading.Text = targetPlayer.Name .. " - avatar items"
+                    heading.Parent = page
+
+                    local ok, description = pcall(function()
+                        return Players:GetHumanoidDescriptionFromUserId(
+                            targetPlayer.UserId
+                        )
+                    end)
+
+                    local items = {}
+                    if ok and description then
+                        for _, property in ipairs({
+                            "HatAccessory", "HairAccessory",
+                            "FaceAccessory", "NeckAccessory",
+                            "ShoulderAccessory", "FrontAccessory",
+                            "BackAccessory", "WaistAccessory"
+                        }) do
+                            local value = description[property]
+                            if value and value ~= "" then
+                                for id in string.gmatch(value, "%d+") do
+                                    table.insert(items, id)
+                                end
+                            end
+                        end
+                    end
+
+                    if #items == 0 then
+                        local label = Instance.new("TextLabel")
+                        label.Position = UDim2.fromOffset(5, 45)
+                        label.Size = UDim2.new(1, -10, 0, 45)
+                        label.BackgroundTransparency = 1
+                        label.TextColor3 = Color3.new(1, 1, 1)
+                        label.Text = "No visible accessories found."
+                        label.Parent = page
+                    else
+                        for i, id in ipairs(items) do
+                            makeButton(page, "Accessory ID: " .. id,
+                                UDim2.fromOffset(5, 42 + (i - 1) * 40),
+                                UDim2.new(1, -10, 0, 36), function()
+                                    local msg = Instance.new("TextLabel")
+                                    msg.Size = UDim2.new(1, -10, 0, 36)
+                                    msg.Position = UDim2.fromOffset(5, 42 + #items * 40)
+                                    msg.BackgroundTransparency = 1
+                                    msg.TextColor3 = Color3.new(1, 1, 1)
+                                    msg.TextWrapped = true
+                                    msg.Text = "Item ID: " .. id ..
+                                        " (inspection only; not equipped)"
+                                    msg.Parent = page
+                                end)
+                        end
+                    end
+                end)
+            y = y + 41
+        end
+    end
+
+    page.CanvasSize = UDim2.fromOffset(0, y + 250)
+end
+
+makeButton(stealPage, "Steal Item - Player List",
+    UDim2.fromOffset(5, 5), UDim2.new(1, -10, 0, 40), function()
+        inspectPlayers(stealPage, "items")
+    end)
+
+makeButton(stealPage, "Avatar Object - Player List",
+    UDim2.fromOffset(5, 52), UDim2.new(1, -10, 0, 40), function()
+        inspectPlayers(stealPage, "avatar")
+    end)
+
+local chatInput = Instance.new("TextBox")
+chatInput.Position = UDim2.fromOffset(5, 5)
+chatInput.Size = UDim2.new(1, -10, 0, 42)
+chatInput.PlaceholderText = "Write a message..."
+chatInput.Text = ""
+chatInput.ClearTextOnFocus = false
+chatInput.TextSize = 15
+chatInput.Parent = chatPage
+
+makeButton(chatPage, "Preview Bubble", UDim2.fromOffset(5, 55),
+    UDim2.new(1, -10, 0, 40), function()
+        local character = player.Character
+        local head = character and character:FindFirstChild("Head")
+        if not head or chatInput.Text == "" then return end
+
+        local old = head:FindFirstChild("ChatPreview")
+        if old then old:Destroy() end
+
+        local bubble = Instance.new("BillboardGui")
+        bubble.Name = "ChatPreview"
+        bubble.Adornee = head
+        bubble.Size = UDim2.fromOffset(230, 55)
+        bubble.StudsOffset = Vector3.new(0, 3, 0)
+        bubble.AlwaysOnTop = true
+        bubble.Parent = head
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.fromScale(1, 1)
+        label.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+        label.TextColor3 = Color3.fromRGB(25, 25, 25)
+        label.TextWrapped = true
+        label.Text = chatInput.Text
+        label.Parent = bubble
+        Instance.new("UICorner", label).CornerRadius = UDim.new(0, 12)
+    end)
+
+showPage("Fly")
